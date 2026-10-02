@@ -6,10 +6,12 @@
 
 假设图片路径为 `images/2026-10/xxx.png`：
 
-- **RAW 直链（发给 AI，推荐）**
+- **RAW 直链（发给 AI，推荐；海外访问最稳）**
   `https://raw.githubusercontent.com/wanghao14811291-ship-it/image-bed/main/images/2026-10/xxx.png`
-- **jsDelivr CDN（国内浏览器打开更快）**
-  `https://cdn.jsdelivr.net/gh/wanghao14811291-ship-it/image-bed@main/images/2026-10/xxx.png`
+- **国内镜像（国内浏览器直接打开）**
+  `https://cdn.jsdmirror.com/gh/wanghao14811291-ship-it/image-bed@main/images/2026-10/xxx.png`
+- **GCORE 备用镜像**
+  `https://gcore.jsdelivr.net/gh/wanghao14811291-ship-it/image-bed@main/images/2026-10/xxx.png`
 
 ## 使用方法（Windows）
 
