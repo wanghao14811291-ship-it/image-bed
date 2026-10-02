@@ -75,10 +75,11 @@ foreach ($f in $files) {
 
 # ---- 提交并推送 ----
 Set-Location $RepoDir
-git add -A
+git add -A 2>$null
 $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-git commit -m "upload $($results.Count) image(s) $ts" 2>&1 | Out-Null
-git push origin $Branch 2>&1 | Out-Null
+git commit -m "upload $($results.Count) image(s) $ts" 2>$null | Out-Null
+git branch -M $Branch
+git push -u origin $Branch 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "推送失败(可能是网络抖动)。图片已在本地仓库，网络恢复后重新双击运行即可，不会丢图。"
 }
