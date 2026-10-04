@@ -18,7 +18,6 @@ $Branch     = "main"
 $RepoDir    = "C:\Users\14811\GitHub\image-bed"
 $DesktopDir = "C:\Users\14811\Desktop\图床"
 $Inbox      = Join-Path $DesktopDir "待上传"
-$Archive    = Join-Path $DesktopDir "已上传"
 $LinksFile  = Join-Path $DesktopDir "links.txt"
 $Exts       = @(".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg")
 $CodexLimit = 900KB      # GitHub contents 接口内联返回的安全大小
@@ -194,13 +193,11 @@ if ($codexPrompts.Count -gt 0) {
     Set-Clipboard -Value (($results | ForEach-Object { $_.Raw }) -join "`r`n")
 }
 
-# 收件箱原图归档
-$archDir = Join-Path $Archive (Get-Date -Format "yyyy-MM-dd")
-New-Item -ItemType Directory -Force $archDir | Out-Null
+# 收件箱原图直接删除(用途为临时给 Codex 看；远程副本 3 小时后由 GitHub Actions 自动清理)
 foreach ($r in $results) {
     try {
         if ($r.Original.StartsWith($Inbox)) {
-            Move-Item -LiteralPath $r.Original -Destination (Join-Path $archDir (Split-Path $r.Original -Leaf)) -Force
+            Remove-Item -LiteralPath $r.Original -Force
         }
     } catch {}
 }
