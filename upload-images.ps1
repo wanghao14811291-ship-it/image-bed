@@ -90,11 +90,26 @@ $month   = Get-Date -Format "yyyy-MM"
 $destDir = Join-Path $RepoDir "images\$month"
 New-Item -ItemType Directory -Force $destDir | Out-Null
 
+# 建立本地仓库已有图片的 SHA256 索引，避免推送失败后重试造成重复图片
+$existingByHash = @{}
+Get-ChildItem -LiteralPath (Join-Path $RepoDir "images") -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+    $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+    if (-not $existingByHash.ContainsKey($hash) -or $_.LastWriteTime -gt $existingByHash[$hash].LastWriteTime) {
+        $existingByHash[$hash] = $_
+    }
+}
+
 $results = @()
 foreach ($f in $files) {
-    # 1) 原图入库
-    $target = Resolve-Target $destDir $f.Name
-    Copy-Item -LiteralPath $f.FullName -Destination $target -Force
+    # 1) 原图入库；如果仓库中已有相同内容，直接复用，不重复复制
+    $sourceHash = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash
+    if ($existingByHash.ContainsKey($sourceHash)) {
+        $target = $existingByHash[$sourceHash].FullName
+    } else {
+        $target = Resolve-Target $destDir $f.Name
+        Copy-Item -LiteralPath $f.FullName -Destination $target -Force
+        $existingByHash[$sourceHash] = Get-Item -LiteralPath $target
+    }
     $savedName = Split-Path $target -Leaf
 
     # 2) 准备 Codex 可读的小图(<=900KB)
@@ -105,7 +120,7 @@ foreach ($f in $files) {
     } elseif ($CompressExts -contains $f.Extension.ToLower()) {
         $base = [System.IO.Path]::GetFileNameWithoutExtension($savedName)
         $smallName = "$base-codex.jpg"
-        $smallTarget = Resolve-Target $destDir $smallName
+        $smallTarget = Join-Path $destDir $smallName
         $tries = @(
             @{ w = 1280; q = 55 },
             @{ w = 1280; q = 40 },
@@ -113,13 +128,18 @@ foreach ($f in $files) {
             @{ w = 960;  q = 25 }
         )
         $ok = $false
-        foreach ($t in $tries) {
-            try {
-                if (Test-Path -LiteralPath $smallTarget) { Remove-Item -LiteralPath $smallTarget -Force }
-                $sz = Compress-Jpeg $f.FullName $smallTarget $t.w $t.q
-                if ($sz -le $CodexLimit) { $ok = $true; break }
-            } catch {
-                Start-Sleep -Milliseconds 200
+        if (Test-Path -LiteralPath $smallTarget) {
+            $ok = $true
+            $codexRel = "images/$month/$smallName"
+        }
+        if (-not $ok) {
+            foreach ($t in $tries) {
+                try {
+                    $sz = Compress-Jpeg $f.FullName $smallTarget $t.w $t.q
+                    if ($sz -le $CodexLimit) { $ok = $true; break }
+                } catch {
+                    Start-Sleep -Milliseconds 200
+                }
             }
         }
         if ($ok) {
@@ -146,14 +166,44 @@ foreach ($f in $files) {
 
 # ---- 提交并推送 ----
 Set-Location $RepoDir
-git add -A 2>$null
+git add -A
 $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-git commit -m "upload $($results.Count) image(s) $ts" 2>$null | Out-Null
-git branch -M $Branch 2>$null
-git push -u origin $Branch 2>$null
-if ($LASTEXITCODE -ne 0) {
+git commit -m "upload $($results.Count) image(s) $ts" | Out-Null
+git branch -M $Branch
+
+$pushOk = $false
+for ($attempt = 1; $attempt -le 2; $attempt++) {
     Write-Host ""
-    Write-Host "推送失败(通常是网络抖动)。图片已在本地仓库，网络恢复后重新双击运行即可，不会丢图。" -ForegroundColor Red
+    if ($attempt -eq 1) {
+        Write-Host "正在同步远端并推送..." -ForegroundColor Cyan
+    } else {
+        Write-Host "推送失败，正在重新同步远端后重试..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+    }
+
+    git fetch origin $Branch
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "无法连接 GitHub 或远端读取失败。" -ForegroundColor Red
+        continue
+    }
+
+    git rebase "origin/$Branch"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "自动同步远端变更时发生冲突，已停止。请检查本地仓库后再推送。" -ForegroundColor Red
+        git rebase --abort
+        exit 1
+    }
+
+    git push -u origin $Branch
+    if ($LASTEXITCODE -eq 0) {
+        $pushOk = $true
+        break
+    }
+}
+
+if (-not $pushOk) {
+    Write-Host ""
+    Write-Host "推送失败。图片已在本地仓库，但请根据上面的 Git 原始错误排查；修复后重新双击运行即可，不会丢图。" -ForegroundColor Red
     exit 1
 }
 
