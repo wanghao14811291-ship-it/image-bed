@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>image-bed - 图片浏览页</title>
+<style>
+  body { background:#16181d; color:#e6e6e6; font-family:system-ui,Arial,sans-serif; margin:0; padding:24px; }
+  h1 { font-size:20px; font-weight:600; }
+  .hint { color:#9aa0a6; font-size:13px; margin-bottom:20px; }
+  .card { background:#1f2229; border:1px solid #2c3038; border-radius:10px; padding:14px; margin-bottom:18px; }
+  .card .name { font-size:14px; color:#8ab4f8; margin-bottom:8px; word-break:break-all; }
+  img { max-width:100%; border-radius:6px; display:block; }
+  a { color:#9aa0a6; font-size:12px; word-break:break-all; }
+  #status { color:#9aa0a6; font-size:13px; }
+</style>
+</head>
+<body>
+  <h1>image-bed 图片浏览页</h1>
+  <div class="hint">本页自动列出图床仓库中的全部图片，新上传的图片刷新即可出现。</div>
+  <div id="status">正在加载图片列表...</div>
+  <div id="list"></div>
+<script>
+const USER = "wanghao14811291-ship-it";
+const REPO = "image-bed";
+const EXTS = [".png",".jpg",".jpeg",".gif",".webp",".bmp",".svg"];
+
+function mirrorUrl(path){ return "https://cdn.jsdmirror.com/gh/" + USER + "/" + REPO + "@main/" + path; }
+function rawUrl(path){ return "https://raw.githubusercontent.com/" + USER + "/" + REPO + "/main/" + path; }
+
+fetch("https://api.github.com/repos/" + USER + "/" + REPO + "/git/trees/main?recursive=1")
+  .then(r => r.json())
+  .then(data => {
+    const files = (data.tree || [])
+      .map(t => t.path)
+      .filter(p => EXTS.some(e => p.toLowerCase().endsWith(e)))
+      .reverse();
+    const status = document.getElementById("status");
+    if (!files.length){ status.textContent = "仓库里还没有图片。"; return; }
+    status.textContent = "共 " + files.length + " 张图片：";
+    const list = document.getElementById("list");
+    files.forEach(p => {
+      const card = document.createElement("div");
+      card.className = "card";
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = p;
+      const img = document.createElement("img");
+      img.src = mirrorUrl(p);
+      img.alt = p;
+      img.onerror = function(){ if(img.src.indexOf("jsdmirror")>-1){ img.src = rawUrl(p); } };
+      const link = document.createElement("div");
+      const a = document.createElement("a");
+      a.href = rawUrl(p);
+      a.textContent = rawUrl(p);
+      link.appendChild(a);
+      card.appendChild(name);
+      card.appendChild(img);
+      card.appendChild(link);
+      list.appendChild(card);
+    });
+  })
+  .catch(e => { document.getElementById("status").textContent = "加载失败: " + e; });
+</script>
+</body>
+</html>
