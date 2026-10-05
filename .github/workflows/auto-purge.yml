@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: auto-purge
+  cancel-in-progress: false
+
 jobs:
   purge:
     runs-on: ubuntu-latest
